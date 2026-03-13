@@ -37,8 +37,12 @@ const env = import.meta.env as ImportMetaEnv & {
   VITE_APP_BACKEND_V2_POST_URL: string;
 };
 
+const normalizePostUrl = (url: string) => url.replace(/\/scenes\/?$/, "/");
+
 const BACKEND_V2_GET_URL = env.VITE_APP_BACKEND_V2_GET_URL ?? "";
-const BACKEND_V2_POST_URL = env.VITE_APP_BACKEND_V2_POST_URL ?? "";
+const BACKEND_V2_POST_URL = normalizePostUrl(
+  env.VITE_APP_BACKEND_V2_POST_URL ?? "",
+);
 
 const ensureApiBaseUrl = (baseUrl: string, label: string) => {
   if (!baseUrl) {
@@ -122,7 +126,7 @@ const getSceneFromStore = async (
   ensureApiBaseUrl(BACKEND_V2_GET_URL, "Backend V2 GET URL");
 
   const response = await fetch(
-    joinUrl(BACKEND_V2_GET_URL, `scenes/${encodeURIComponent(roomId)}`),
+    joinUrl(BACKEND_V2_GET_URL, `rooms/${encodeURIComponent(roomId)}`),
     {
       method: "GET",
     },
@@ -149,7 +153,7 @@ const saveSceneToStore = async (
   const body = new TextEncoder().encode(JSON.stringify(scene));
 
   const response = await fetch(
-    joinUrl(BACKEND_V2_POST_URL, encodeURIComponent(roomId)),
+    joinUrl(BACKEND_V2_POST_URL, `rooms/${encodeURIComponent(roomId)}`),
     {
       method: "PUT",
       body,
