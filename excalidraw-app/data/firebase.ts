@@ -37,10 +37,11 @@ const env = import.meta.env as ImportMetaEnv & {
   VITE_APP_BACKEND_V2_POST_URL: string;
 };
 
-const normalizePostUrl = (url: string) => url.replace(/\/scenes\/?$/, "/");
+const normalizeUrl = (url: string) =>
+  url.replace(/\/(scenes|rooms|files)\/?$/, "/");
 
-const BACKEND_V2_GET_URL = env.VITE_APP_BACKEND_V2_GET_URL ?? "";
-const BACKEND_V2_POST_URL = normalizePostUrl(
+const BACKEND_V2_GET_URL = normalizeUrl(env.VITE_APP_BACKEND_V2_GET_URL ?? "");
+const BACKEND_V2_POST_URL = normalizeUrl(
   env.VITE_APP_BACKEND_V2_POST_URL ?? "",
 );
 
