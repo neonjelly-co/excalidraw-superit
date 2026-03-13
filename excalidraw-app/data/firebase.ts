@@ -32,80 +32,18 @@ import type { Socket } from "socket.io-client";
 // private
 // -----------------------------------------------------------------------------
 
-const env = import.meta.env as ImportMetaEnv &
-  Record<string, string | undefined>;
-
-const normalizeBackendV2StorageBaseUrl = (url: string | undefined) =>
-  (url || "").replace(/\/post\/?$/, "/");
-
-const BACKEND_V2_STORAGE_BASE_URL =
-  env.VITE_APP_BACKEND_V2_GET_URL ||
-  normalizeBackendV2StorageBaseUrl(env.VITE_APP_BACKEND_V2_POST_URL) ||
-  env.VITE_APP_BACKEND_V2_POST_URL ||
-  "";
-
-const PERSISTENCE_API_BASE_URL_GET =
-  env.VITE_APP_PERSISTENCE_API_URL || BACKEND_V2_STORAGE_BASE_URL;
-
-const PERSISTENCE_API_BASE_URL_POST =
-  env.VITE_APP_PERSISTENCE_API_URL || BACKEND_V2_STORAGE_BASE_URL;
-
-const USE_BACKEND_V2_ROOMS_STORAGE =
-  !env.VITE_APP_PERSISTENCE_API_URL &&
-  !env.VITE_APP_PG_SCENES_API_URL &&
-  !env.VITE_APP_SCENES_API_URL &&
-  !!BACKEND_V2_STORAGE_BASE_URL;
-
-const SCENE_STORAGE_RESOURCE = USE_BACKEND_V2_ROOMS_STORAGE
-  ? "rooms"
-  : "scenes";
-
-const SCENES_API_BASE_URL_GET =
-  env.VITE_APP_PG_SCENES_API_URL ||
-  env.VITE_APP_SCENES_API_URL ||
-  PERSISTENCE_API_BASE_URL_GET;
-
-const SCENES_API_BASE_URL_POST =
-  env.VITE_APP_PG_SCENES_API_URL ||
-  env.VITE_APP_SCENES_API_URL ||
-  PERSISTENCE_API_BASE_URL_POST;
-
-const FILES_API_BASE_URL_GET =
-  env.VITE_APP_FILES_API_URL ||
-  env.VITE_APP_STORAGE_API_URL ||
-  PERSISTENCE_API_BASE_URL_GET;
-
-const FILES_API_BASE_URL_POST =
-  env.VITE_APP_FILES_API_URL ||
-  env.VITE_APP_STORAGE_API_URL ||
-  PERSISTENCE_API_BASE_URL_POST;
-
-const createPersistenceHeaders = (): Record<string, string> => {
-  const headers: Record<string, string> = {};
-
-  const pgHost = env.VITE_APP_PG_HOST;
-  const pgPort = env.VITE_APP_PG_PORT;
-  const pgDatabase = env.VITE_APP_PG_DATABASE;
-  const pgUser = env.VITE_APP_PG_USER;
-  const pgPassword = env.VITE_APP_PG_PASSWORD;
-  const pgSchema = env.VITE_APP_PG_SCHEMA;
-  const pgSslMode = env.VITE_APP_PG_SSLMODE;
-
-  if (pgHost) headers["x-pg-host"] = pgHost;
-  if (pgPort) headers["x-pg-port"] = pgPort;
-  if (pgDatabase) headers["x-pg-database"] = pgDatabase;
-  if (pgUser) headers["x-pg-user"] = pgUser;
-  if (pgPassword) headers["x-pg-password"] = pgPassword;
-  if (pgSchema) headers["x-pg-schema"] = pgSchema;
-  if (pgSslMode) headers["x-pg-sslmode"] = pgSslMode;
-
-  return headers;
+const env = import.meta.env as ImportMetaEnv & {
+  VITE_APP_BACKEND_V2_GET_URL: string;
+  VITE_APP_BACKEND_V2_POST_URL: string;
 };
+
+const BACKEND_V2_GET_URL = env.VITE_APP_BACKEND_V2_GET_URL ?? "";
+const BACKEND_V2_POST_URL = env.VITE_APP_BACKEND_V2_POST_URL ?? "";
 
 const ensureApiBaseUrl = (baseUrl: string, label: string) => {
   if (!baseUrl) {
     throw new Error(
-      `${label} is not configured. Set one of: VITE_APP_PERSISTENCE_API_URL, VITE_APP_BACKEND_V2_GET_URL, VITE_APP_BACKEND_V2_POST_URL, VITE_APP_SCENES_API_URL, VITE_APP_FILES_API_URL, VITE_APP_PG_SCENES_API_URL, VITE_APP_STORAGE_API_URL.`,
+      `${label} is not configured. Set VITE_APP_BACKEND_V2_GET_URL and VITE_APP_BACKEND_V2_POST_URL.`,
     );
   }
 };
@@ -143,7 +81,7 @@ const getStorageObjectPath = (prefix: string, id: string) => {
 export const loadFirebaseStorage = async (): Promise<any> => {
   return {
     kind: "filesystem-api",
-    baseUrl: FILES_API_BASE_URL_POST,
+    baseUrl: BACKEND_V2_POST_URL,
   };
 };
 
@@ -181,18 +119,12 @@ const decryptElements = async (
 const getSceneFromStore = async (
   roomId: string,
 ): Promise<StoredScene | null> => {
-  ensureApiBaseUrl(SCENES_API_BASE_URL_GET, "Scenes API base URL");
+  ensureApiBaseUrl(BACKEND_V2_GET_URL, "Backend V2 GET URL");
 
   const response = await fetch(
-    joinUrl(
-      SCENES_API_BASE_URL_GET,
-      `${SCENE_STORAGE_RESOURCE}/${encodeURIComponent(roomId)}`,
-    ),
+    joinUrl(BACKEND_V2_GET_URL, `scenes/${encodeURIComponent(roomId)}`),
     {
       method: "GET",
-      headers: {
-        ...createPersistenceHeaders(),
-      },
     },
   );
 
@@ -204,11 +136,7 @@ const getSceneFromStore = async (
     throw new Error(`Failed loading scene from store (${response.status}).`);
   }
 
-  if (SCENE_STORAGE_RESOURCE === "rooms") {
-    return JSON.parse(await response.text()) as StoredScene;
-  }
-
-  return (await response.json()) as StoredScene;
+  return JSON.parse(await response.text()) as StoredScene;
 };
 
 const saveSceneToStore = async (
@@ -216,48 +144,23 @@ const saveSceneToStore = async (
   scene: StoredScene,
   expectedSceneVersion: number | null,
 ): Promise<{ scene: StoredScene; conflicted: boolean }> => {
-  ensureApiBaseUrl(SCENES_API_BASE_URL_POST, "Scenes API base URL");
+  ensureApiBaseUrl(BACKEND_V2_POST_URL, "Backend V2 POST URL");
 
-  const isRoomsStorage = SCENE_STORAGE_RESOURCE === "rooms";
-  const persistenceHeaders = createPersistenceHeaders();
-  const headers = isRoomsStorage
-    ? persistenceHeaders
-    : {
-        "content-type": "application/json",
-        ...persistenceHeaders,
-      };
-  const body = isRoomsStorage
-    ? new TextEncoder().encode(JSON.stringify(scene))
-    : JSON.stringify({
-        ...scene,
-        expectedSceneVersion,
-      });
+  const body = new TextEncoder().encode(JSON.stringify(scene));
 
   const response = await fetch(
-    joinUrl(
-      SCENES_API_BASE_URL_POST,
-      `${SCENE_STORAGE_RESOURCE}/${encodeURIComponent(roomId)}`,
-    ),
+    joinUrl(BACKEND_V2_POST_URL, encodeURIComponent(roomId)),
     {
       method: "PUT",
-      headers,
       body,
     },
   );
-
-  if (!isRoomsStorage && response.status === 409) {
-    return { scene, conflicted: true };
-  }
 
   if (!response.ok) {
     throw new Error(`Failed saving scene to store (${response.status}).`);
   }
 
-  if (isRoomsStorage) {
-    return { scene, conflicted: false };
-  }
-
-  return { scene: (await response.json()) as StoredScene, conflicted: false };
+  return { scene, conflicted: false };
 };
 
 class SceneVersionCache {
@@ -297,7 +200,7 @@ export const saveFilesToFirebase = async ({
   const erroredFiles: FileId[] = [];
   const savedFiles: FileId[] = [];
 
-  ensureApiBaseUrl(FILES_API_BASE_URL_POST, "Files API base URL");
+  ensureApiBaseUrl(BACKEND_V2_POST_URL, "Backend V2 POST URL");
 
   await Promise.all(
     files.map(async ({ id, buffer }) => {
@@ -305,7 +208,7 @@ export const saveFilesToFirebase = async ({
         const objectPath = getStorageObjectPath(prefix, id);
         const response = await fetch(
           joinUrl(
-            FILES_API_BASE_URL_POST,
+            BACKEND_V2_POST_URL,
             `files/${encodeURIComponent(objectPath)}`,
           ),
           {
@@ -313,7 +216,6 @@ export const saveFilesToFirebase = async ({
             headers: {
               "content-type": "application/octet-stream",
               "cache-control": `public, max-age=${FILE_CACHE_MAX_AGE_SEC}`,
-              ...createPersistenceHeaders(),
             },
             body: new Blob([new Uint8Array(buffer)]),
           },
@@ -438,7 +340,7 @@ export const loadFilesFromFirebase = async (
   const loadedFiles: BinaryFileData[] = [];
   const erroredFiles = new Map<FileId, true>();
 
-  ensureApiBaseUrl(FILES_API_BASE_URL_GET, "Files API base URL");
+  ensureApiBaseUrl(BACKEND_V2_GET_URL, "Backend V2 GET URL");
 
   await Promise.all(
     [...new Set(filesIds)].map(async (id) => {
@@ -446,14 +348,11 @@ export const loadFilesFromFirebase = async (
         const objectPath = getStorageObjectPath(prefix, id);
         const response = await fetch(
           joinUrl(
-            FILES_API_BASE_URL_GET,
+            BACKEND_V2_GET_URL,
             `files/${encodeURIComponent(objectPath)}`,
           ),
           {
             method: "GET",
-            headers: {
-              ...createPersistenceHeaders(),
-            },
           },
         );
         if (response.status < 400) {
