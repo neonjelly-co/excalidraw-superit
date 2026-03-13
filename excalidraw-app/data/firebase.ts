@@ -35,17 +35,30 @@ import type { Socket } from "socket.io-client";
 const env = import.meta.env as ImportMetaEnv &
   Record<string, string | undefined>;
 
-const PERSISTENCE_API_BASE_URL_GET =
-  env.VITE_APP_PERSISTENCE_API_URL ||
+const normalizeBackendV2StorageBaseUrl = (url: string | undefined) =>
+  (url || "").replace(/\/post\/?$/, "/");
+
+const BACKEND_V2_STORAGE_BASE_URL =
   env.VITE_APP_BACKEND_V2_GET_URL ||
+  normalizeBackendV2StorageBaseUrl(env.VITE_APP_BACKEND_V2_POST_URL) ||
   env.VITE_APP_BACKEND_V2_POST_URL ||
   "";
 
+const PERSISTENCE_API_BASE_URL_GET =
+  env.VITE_APP_PERSISTENCE_API_URL || BACKEND_V2_STORAGE_BASE_URL;
+
 const PERSISTENCE_API_BASE_URL_POST =
-  env.VITE_APP_PERSISTENCE_API_URL ||
-  env.VITE_APP_BACKEND_V2_POST_URL ||
-  env.VITE_APP_BACKEND_V2_GET_URL ||
-  "";
+  env.VITE_APP_PERSISTENCE_API_URL || BACKEND_V2_STORAGE_BASE_URL;
+
+const USE_BACKEND_V2_ROOMS_STORAGE =
+  !env.VITE_APP_PERSISTENCE_API_URL &&
+  !env.VITE_APP_PG_SCENES_API_URL &&
+  !env.VITE_APP_SCENES_API_URL &&
+  !!BACKEND_V2_STORAGE_BASE_URL;
+
+const SCENE_STORAGE_RESOURCE = USE_BACKEND_V2_ROOMS_STORAGE
+  ? "rooms"
+  : "scenes";
 
 const SCENES_API_BASE_URL_GET =
   env.VITE_APP_PG_SCENES_API_URL ||
@@ -168,13 +181,13 @@ const decryptElements = async (
 const getSceneFromStore = async (
   roomId: string,
 ): Promise<StoredScene | null> => {
-  ensureApiBaseUrl(
-    SCENES_API_BASE_URL_GET,
-    "Scenes GET API base URL (VITE_APP_BACKEND_V2_GET_URL)",
-  );
+  ensureApiBaseUrl(SCENES_API_BASE_URL_GET, "Scenes API base URL");
 
   const response = await fetch(
-    joinUrl(SCENES_API_BASE_URL_GET, `scenes/${encodeURIComponent(roomId)}`),
+    joinUrl(
+      SCENES_API_BASE_URL_GET,
+      `${SCENE_STORAGE_RESOURCE}/${encodeURIComponent(roomId)}`,
+    ),
     {
       method: "GET",
       headers: {
@@ -188,9 +201,11 @@ const getSceneFromStore = async (
   }
 
   if (!response.ok) {
-    throw new Error(
-      `Failed loading scene from PostgreSQL store (${response.status}).`,
-    );
+    throw new Error(`Failed loading scene from store (${response.status}).`);
+  }
+
+  if (SCENE_STORAGE_RESOURCE === "rooms") {
+    return JSON.parse(await response.text()) as StoredScene;
   }
 
   return (await response.json()) as StoredScene;
@@ -201,34 +216,40 @@ const saveSceneToStore = async (
   scene: StoredScene,
   expectedSceneVersion: number | null,
 ): Promise<{ scene: StoredScene; conflicted: boolean }> => {
-  ensureApiBaseUrl(
-    SCENES_API_BASE_URL_POST,
-    "Scenes write API base URL (VITE_APP_BACKEND_V2_POST_URL)",
-  );
+  ensureApiBaseUrl(SCENES_API_BASE_URL_POST, "Scenes API base URL");
 
   const response = await fetch(
-    joinUrl(SCENES_API_BASE_URL_POST, `scenes/${encodeURIComponent(roomId)}`),
+    joinUrl(
+      SCENES_API_BASE_URL_POST,
+      `${SCENE_STORAGE_RESOURCE}/${encodeURIComponent(roomId)}`,
+    ),
     {
       method: "PUT",
       headers: {
         "content-type": "application/json",
         ...createPersistenceHeaders(),
       },
-      body: JSON.stringify({
-        ...scene,
-        expectedSceneVersion,
-      }),
+      body: JSON.stringify(
+        SCENE_STORAGE_RESOURCE === "rooms"
+          ? scene
+          : {
+              ...scene,
+              expectedSceneVersion,
+            },
+      ),
     },
   );
 
-  if (response.status === 409) {
+  if (SCENE_STORAGE_RESOURCE === "scenes" && response.status === 409) {
     return { scene, conflicted: true };
   }
 
   if (!response.ok) {
-    throw new Error(
-      `Failed saving scene to PostgreSQL store (${response.status}).`,
-    );
+    throw new Error(`Failed saving scene to store (${response.status}).`);
+  }
+
+  if (SCENE_STORAGE_RESOURCE === "rooms") {
+    return { scene, conflicted: false };
   }
 
   return { scene: (await response.json()) as StoredScene, conflicted: false };
@@ -271,10 +292,7 @@ export const saveFilesToFirebase = async ({
   const erroredFiles: FileId[] = [];
   const savedFiles: FileId[] = [];
 
-  ensureApiBaseUrl(
-    FILES_API_BASE_URL_POST,
-    "Files write API base URL (VITE_APP_BACKEND_V2_POST_URL)",
-  );
+  ensureApiBaseUrl(FILES_API_BASE_URL_POST, "Files API base URL");
 
   await Promise.all(
     files.map(async ({ id, buffer }) => {
@@ -415,10 +433,7 @@ export const loadFilesFromFirebase = async (
   const loadedFiles: BinaryFileData[] = [];
   const erroredFiles = new Map<FileId, true>();
 
-  ensureApiBaseUrl(
-    FILES_API_BASE_URL_GET,
-    "Files GET API base URL (VITE_APP_BACKEND_V2_GET_URL)",
-  );
+  ensureApiBaseUrl(FILES_API_BASE_URL_GET, "Files API base URL");
 
   await Promise.all(
     [...new Set(filesIds)].map(async (id) => {
