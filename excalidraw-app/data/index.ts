@@ -65,6 +65,23 @@ export const getSyncableElements = (
 const BACKEND_V2_GET = import.meta.env.VITE_APP_BACKEND_V2_GET_URL;
 const BACKEND_V2_POST = import.meta.env.VITE_APP_BACKEND_V2_POST_URL;
 
+const normalizeUrl = (url: string | undefined) =>
+  (url || "").replace(/\/+$/, "");
+
+const toScenesCollectionUrl = (url: string | undefined) => {
+  const normalizedUrl = normalizeUrl(url);
+  if (!normalizedUrl) {
+    return normalizedUrl;
+  }
+  if (normalizedUrl.endsWith("/scenes")) {
+    return normalizedUrl;
+  }
+  if (normalizedUrl.endsWith("/post")) {
+    return `${normalizedUrl.slice(0, -"/post".length)}/scenes`;
+  }
+  return `${normalizedUrl}/scenes`;
+};
+
 const generateRoomId = async () => {
   const buffer = new Uint8Array(ROOM_ID_BYTES);
   window.crypto.getRandomValues(buffer);
@@ -204,7 +221,15 @@ export const importFromBackend = async (
   decryptionKey: string,
 ): Promise<ImportedDataState> => {
   try {
-    const response = await fetch(`${BACKEND_V2_GET}${id}`);
+    let response = await fetch(`${BACKEND_V2_GET}${id}`);
+    if (!response.ok && response.status === 404) {
+      const fallbackUrl = `${toScenesCollectionUrl(BACKEND_V2_GET)}/${id}`;
+      if (
+        normalizeUrl(fallbackUrl) !== normalizeUrl(`${BACKEND_V2_GET}${id}`)
+      ) {
+        response = await fetch(fallbackUrl);
+      }
+    }
 
     if (!response.ok) {
       window.alert(t("alerts.importBackendFailed"));
@@ -273,11 +298,28 @@ export const exportToBackend = async (
       maxBytes: FILE_UPLOAD_MAX_BYTES,
     });
 
-    const response = await fetch(BACKEND_V2_POST, {
+    let response = await fetch(BACKEND_V2_POST, {
       method: "POST",
       body: payload.buffer,
     });
-    const json = await response.json();
+
+    if (!response.ok && response.status === 404) {
+      const fallbackUrl = toScenesCollectionUrl(BACKEND_V2_POST);
+      if (normalizeUrl(fallbackUrl) !== normalizeUrl(BACKEND_V2_POST)) {
+        response = await fetch(fallbackUrl, {
+          method: "POST",
+          body: payload.buffer,
+        });
+      }
+    }
+
+    let json: any = {};
+    try {
+      json = await response.json();
+    } catch {
+      json = {};
+    }
+
     if (json.id) {
       const url = new URL(window.location.href);
       // We need to store the key (and less importantly the id) as hash instead
