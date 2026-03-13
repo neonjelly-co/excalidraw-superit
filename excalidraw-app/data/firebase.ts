@@ -218,6 +218,21 @@ const saveSceneToStore = async (
 ): Promise<{ scene: StoredScene; conflicted: boolean }> => {
   ensureApiBaseUrl(SCENES_API_BASE_URL_POST, "Scenes API base URL");
 
+  const isRoomsStorage = SCENE_STORAGE_RESOURCE === "rooms";
+  const persistenceHeaders = createPersistenceHeaders();
+  const headers = isRoomsStorage
+    ? persistenceHeaders
+    : {
+        "content-type": "application/json",
+        ...persistenceHeaders,
+      };
+  const body = isRoomsStorage
+    ? new TextEncoder().encode(JSON.stringify(scene))
+    : JSON.stringify({
+        ...scene,
+        expectedSceneVersion,
+      });
+
   const response = await fetch(
     joinUrl(
       SCENES_API_BASE_URL_POST,
@@ -225,22 +240,12 @@ const saveSceneToStore = async (
     ),
     {
       method: "PUT",
-      headers: {
-        "content-type": "application/json",
-        ...createPersistenceHeaders(),
-      },
-      body: JSON.stringify(
-        SCENE_STORAGE_RESOURCE === "rooms"
-          ? scene
-          : {
-              ...scene,
-              expectedSceneVersion,
-            },
-      ),
+      headers,
+      body,
     },
   );
 
-  if (SCENE_STORAGE_RESOURCE === "scenes" && response.status === 409) {
+  if (!isRoomsStorage && response.status === 409) {
     return { scene, conflicted: true };
   }
 
@@ -248,7 +253,7 @@ const saveSceneToStore = async (
     throw new Error(`Failed saving scene to store (${response.status}).`);
   }
 
-  if (SCENE_STORAGE_RESOURCE === "rooms") {
+  if (isRoomsStorage) {
     return { scene, conflicted: false };
   }
 
