@@ -35,18 +35,37 @@ import type { Socket } from "socket.io-client";
 const env = import.meta.env as ImportMetaEnv &
   Record<string, string | undefined>;
 
-const PERSISTENCE_API_BASE_URL =
-  env.VITE_APP_PERSISTENCE_API_URL || env.VITE_APP_BACKEND_V2_POST_URL || "";
+const PERSISTENCE_API_BASE_URL_GET =
+  env.VITE_APP_PERSISTENCE_API_URL ||
+  env.VITE_APP_BACKEND_V2_GET_URL ||
+  env.VITE_APP_BACKEND_V2_POST_URL ||
+  "";
 
-const SCENES_API_BASE_URL =
+const PERSISTENCE_API_BASE_URL_POST =
+  env.VITE_APP_PERSISTENCE_API_URL ||
+  env.VITE_APP_BACKEND_V2_POST_URL ||
+  env.VITE_APP_BACKEND_V2_GET_URL ||
+  "";
+
+const SCENES_API_BASE_URL_GET =
   env.VITE_APP_PG_SCENES_API_URL ||
   env.VITE_APP_SCENES_API_URL ||
-  PERSISTENCE_API_BASE_URL;
+  PERSISTENCE_API_BASE_URL_GET;
 
-const FILES_API_BASE_URL =
+const SCENES_API_BASE_URL_POST =
+  env.VITE_APP_PG_SCENES_API_URL ||
+  env.VITE_APP_SCENES_API_URL ||
+  PERSISTENCE_API_BASE_URL_POST;
+
+const FILES_API_BASE_URL_GET =
   env.VITE_APP_FILES_API_URL ||
   env.VITE_APP_STORAGE_API_URL ||
-  PERSISTENCE_API_BASE_URL;
+  PERSISTENCE_API_BASE_URL_GET;
+
+const FILES_API_BASE_URL_POST =
+  env.VITE_APP_FILES_API_URL ||
+  env.VITE_APP_STORAGE_API_URL ||
+  PERSISTENCE_API_BASE_URL_POST;
 
 const createPersistenceHeaders = (): Record<string, string> => {
   const headers: Record<string, string> = {};
@@ -73,7 +92,7 @@ const createPersistenceHeaders = (): Record<string, string> => {
 const ensureApiBaseUrl = (baseUrl: string, label: string) => {
   if (!baseUrl) {
     throw new Error(
-      `${label} is not configured. Set one of: VITE_APP_PERSISTENCE_API_URL, VITE_APP_SCENES_API_URL, VITE_APP_FILES_API_URL, VITE_APP_PG_SCENES_API_URL, VITE_APP_STORAGE_API_URL.`,
+      `${label} is not configured. Set one of: VITE_APP_PERSISTENCE_API_URL, VITE_APP_BACKEND_V2_GET_URL, VITE_APP_BACKEND_V2_POST_URL, VITE_APP_SCENES_API_URL, VITE_APP_FILES_API_URL, VITE_APP_PG_SCENES_API_URL, VITE_APP_STORAGE_API_URL.`,
     );
   }
 };
@@ -111,7 +130,7 @@ const getStorageObjectPath = (prefix: string, id: string) => {
 export const loadFirebaseStorage = async (): Promise<any> => {
   return {
     kind: "filesystem-api",
-    baseUrl: FILES_API_BASE_URL,
+    baseUrl: FILES_API_BASE_URL_POST,
   };
 };
 
@@ -149,10 +168,13 @@ const decryptElements = async (
 const getSceneFromStore = async (
   roomId: string,
 ): Promise<StoredScene | null> => {
-  ensureApiBaseUrl(SCENES_API_BASE_URL, "Scenes API base URL");
+  ensureApiBaseUrl(
+    SCENES_API_BASE_URL_GET,
+    "Scenes GET API base URL (VITE_APP_BACKEND_V2_GET_URL)",
+  );
 
   const response = await fetch(
-    joinUrl(SCENES_API_BASE_URL, `scenes/${encodeURIComponent(roomId)}`),
+    joinUrl(SCENES_API_BASE_URL_GET, `scenes/${encodeURIComponent(roomId)}`),
     {
       method: "GET",
       headers: {
@@ -179,10 +201,13 @@ const saveSceneToStore = async (
   scene: StoredScene,
   expectedSceneVersion: number | null,
 ): Promise<{ scene: StoredScene; conflicted: boolean }> => {
-  ensureApiBaseUrl(SCENES_API_BASE_URL, "Scenes API base URL");
+  ensureApiBaseUrl(
+    SCENES_API_BASE_URL_POST,
+    "Scenes write API base URL (VITE_APP_BACKEND_V2_POST_URL)",
+  );
 
   const response = await fetch(
-    joinUrl(SCENES_API_BASE_URL, `scenes/${encodeURIComponent(roomId)}`),
+    joinUrl(SCENES_API_BASE_URL_POST, `scenes/${encodeURIComponent(roomId)}`),
     {
       method: "PUT",
       headers: {
@@ -246,7 +271,10 @@ export const saveFilesToFirebase = async ({
   const erroredFiles: FileId[] = [];
   const savedFiles: FileId[] = [];
 
-  ensureApiBaseUrl(FILES_API_BASE_URL, "Files API base URL");
+  ensureApiBaseUrl(
+    FILES_API_BASE_URL_POST,
+    "Files write API base URL (VITE_APP_BACKEND_V2_POST_URL)",
+  );
 
   await Promise.all(
     files.map(async ({ id, buffer }) => {
@@ -254,7 +282,7 @@ export const saveFilesToFirebase = async ({
         const objectPath = getStorageObjectPath(prefix, id);
         const response = await fetch(
           joinUrl(
-            FILES_API_BASE_URL,
+            FILES_API_BASE_URL_POST,
             `files/${encodeURIComponent(objectPath)}`,
           ),
           {
@@ -387,7 +415,10 @@ export const loadFilesFromFirebase = async (
   const loadedFiles: BinaryFileData[] = [];
   const erroredFiles = new Map<FileId, true>();
 
-  ensureApiBaseUrl(FILES_API_BASE_URL, "Files API base URL");
+  ensureApiBaseUrl(
+    FILES_API_BASE_URL_GET,
+    "Files GET API base URL (VITE_APP_BACKEND_V2_GET_URL)",
+  );
 
   await Promise.all(
     [...new Set(filesIds)].map(async (id) => {
@@ -395,7 +426,7 @@ export const loadFilesFromFirebase = async (
         const objectPath = getStorageObjectPath(prefix, id);
         const response = await fetch(
           joinUrl(
-            FILES_API_BASE_URL,
+            FILES_API_BASE_URL_GET,
             `files/${encodeURIComponent(objectPath)}`,
           ),
           {
