@@ -81,6 +81,13 @@ const getStorageObjectPath = (prefix: string, id: string) => {
   return `${normalizedPrefix}/${id}`;
 };
 
+const encodeStorageObjectPath = (path: string) =>
+  path
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
 // -----------------------------------------------------------------------------
 
 export const loadFirebaseStorage = async (): Promise<any> => {
@@ -212,10 +219,7 @@ export const saveFilesToFirebase = async ({
       try {
         const objectPath = getStorageObjectPath(prefix, id);
         const response = await fetch(
-          joinUrl(
-            BACKEND_V2_POST_URL,
-            `files/${encodeURIComponent(objectPath)}`,
-          ),
+          joinUrl(BACKEND_V2_POST_URL, encodeStorageObjectPath(objectPath)),
           {
             method: "PUT",
             headers: {
@@ -352,10 +356,7 @@ export const loadFilesFromFirebase = async (
       try {
         const objectPath = getStorageObjectPath(prefix, id);
         const response = await fetch(
-          joinUrl(
-            BACKEND_V2_GET_URL,
-            `files/${encodeURIComponent(objectPath)}`,
-          ),
+          joinUrl(BACKEND_V2_GET_URL, encodeStorageObjectPath(objectPath)),
           {
             method: "GET",
           },
