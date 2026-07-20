@@ -8,6 +8,12 @@ interface ImportMetaEnv {
   VITE_APP_BACKEND_V2_GET_URL: string;
   VITE_APP_BACKEND_V2_POST_URL: string;
 
+  // Runtime-injectable (via @import-meta-env); must not use VITE_ prefix
+  APP_BACKEND_V2_GET_URL: string;
+  APP_BACKEND_V2_POST_URL: string;
+  APP_WS_SERVER_URL: string;
+  APP_AI_BACKEND: string;
+
   // collaboration WebSocket server (https: string
   VITE_APP_WS_SERVER_URL: string;
 

@@ -32,23 +32,20 @@ import type { Socket } from "socket.io-client";
 // private
 // -----------------------------------------------------------------------------
 
-const env = import.meta.env as ImportMetaEnv & {
-  VITE_APP_BACKEND_V2_GET_URL: string;
-  VITE_APP_BACKEND_V2_POST_URL: string;
-};
-
 const normalizeUrl = (url: string) =>
   url.replace(/\/(scenes|rooms|files)\/?$/, "/");
 
-const BACKEND_V2_GET_URL = normalizeUrl(env.VITE_APP_BACKEND_V2_GET_URL ?? "");
+const BACKEND_V2_GET_URL = normalizeUrl(
+  import.meta.env.APP_BACKEND_V2_GET_URL ?? "",
+);
 const BACKEND_V2_POST_URL = normalizeUrl(
-  env.VITE_APP_BACKEND_V2_POST_URL ?? "",
+  import.meta.env.APP_BACKEND_V2_POST_URL ?? "",
 );
 
 const ensureApiBaseUrl = (baseUrl: string, label: string) => {
   if (!baseUrl) {
     throw new Error(
-      `${label} is not configured. Set VITE_APP_BACKEND_V2_GET_URL and VITE_APP_BACKEND_V2_POST_URL.`,
+      `${label} is not configured. Set APP_BACKEND_V2_GET_URL and APP_BACKEND_V2_POST_URL.`,
     );
   }
 };

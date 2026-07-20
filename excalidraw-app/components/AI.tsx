@@ -42,7 +42,7 @@ export const AIComponents = ({
 
           const response = await fetch(
             `${
-              import.meta.env.VITE_APP_AI_BACKEND
+              import.meta.env.APP_AI_BACKEND
             }/v1/ai/diagram-to-code/generate`,
             {
               method: "POST",
@@ -107,7 +107,7 @@ export const AIComponents = ({
 
           const result = await TTDStreamFetch({
             url: `${
-              import.meta.env.VITE_APP_AI_BACKEND
+              import.meta.env.APP_AI_BACKEND
             }/v1/ai/text-to-diagram/chat-streaming`,
             messages,
             onChunk,

@@ -1,9 +1,11 @@
 *
 !.env.development
 !.env.production
+!.env.example
 !.eslintrc.json
 !.npmrc
 !.prettierrc
+!docker/
 !excalidraw-app/
 !package.json
 !public/

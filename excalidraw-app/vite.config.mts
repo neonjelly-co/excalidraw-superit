@@ -7,6 +7,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import checker from "vite-plugin-checker";
 import { createHtmlPlugin } from "vite-plugin-html";
 import Sitemap from "vite-plugin-sitemap";
+import importMetaEnv from "@import-meta-env/unplugin";
 import { woff2BrowserPlugin } from "../scripts/woff2/woff2-vite-plugins";
 export default defineConfig(({ mode }) => {
   // To load .env variables
@@ -118,6 +119,13 @@ export default defineConfig(({ mode }) => {
       assetsInlineLimit: 0,
     },
     plugins: [
+      importMetaEnv.vite({
+        example: path.resolve(__dirname, "../.env.example"),
+        env:
+          mode === "development"
+            ? path.resolve(__dirname, "../.env.development")
+            : path.resolve(__dirname, "../.env.production"),
+      }),
       Sitemap({
         hostname: "https://excalidraw.com",
         outDir: "build",
