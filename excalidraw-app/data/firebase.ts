@@ -28,6 +28,7 @@ import { getSyncableElements } from ".";
 import type { SyncableExcalidrawElement } from ".";
 import type Portal from "../collab/Portal";
 import type { Socket } from "socket.io-client";
+import type { UploadMetadata } from "firebase/storage";
 
 // private
 // -----------------------------------------------------------------------------
@@ -87,11 +88,31 @@ const encodeStorageObjectPath = (path: string) =>
 
 // -----------------------------------------------------------------------------
 
-export const loadFirebaseStorage = async (): Promise<any> => {
-  return {
-    kind: "filesystem-api",
-    baseUrl: BACKEND_V2_POST_URL,
+export const uploadBytesToFirebase = async (
+  path: string,
+  data: Blob | Uint8Array,
+  metadata?: UploadMetadata,
+) => {
+  ensureApiBaseUrl(BACKEND_V2_POST_URL, "Backend V2 POST URL");
+
+  const headers: Record<string, string> = {
+    "content-type": "application/octet-stream",
   };
+  if (metadata?.cacheControl) {
+    headers["cache-control"] = metadata.cacheControl;
+  }
+
+  const response = await fetch(
+    joinUrl(BACKEND_V2_POST_URL, encodeStorageObjectPath(path)),
+    {
+      method: "PUT",
+      headers,
+      body: data instanceof Blob ? data : new Blob([new Uint8Array(data)]),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed uploading '${path}' (${response.status})`);
+  }
 };
 
 type StoredScene = {
@@ -214,21 +235,9 @@ export const saveFilesToFirebase = async ({
   await Promise.all(
     files.map(async ({ id, buffer }) => {
       try {
-        const objectPath = getStorageObjectPath(prefix, id);
-        const response = await fetch(
-          joinUrl(BACKEND_V2_POST_URL, encodeStorageObjectPath(objectPath)),
-          {
-            method: "PUT",
-            headers: {
-              "content-type": "application/octet-stream",
-              "cache-control": `public, max-age=${FILE_CACHE_MAX_AGE_SEC}`,
-            },
-            body: new Blob([new Uint8Array(buffer)]),
-          },
-        );
-        if (!response.ok) {
-          throw new Error(`Failed saving file '${id}' (${response.status})`);
-        }
+        await uploadBytesToFirebase(getStorageObjectPath(prefix, id), buffer, {
+          cacheControl: `public, max-age=${FILE_CACHE_MAX_AGE_SEC}`,
+        });
         savedFiles.push(id);
       } catch (error: any) {
         erroredFiles.push(id);
